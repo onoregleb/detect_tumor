@@ -1,3 +1,7 @@
 yolov8n.pt
 .idea/
 .vscode/
+.venv/
+node_modules/
+dist/
+build/

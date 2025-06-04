@@ -18,6 +18,13 @@
 </head>
 <body>
     <div id="root"></div>
-    <script src="./dist/bundle.js"></script>
+    <script>
+        // Add error handling for script loading
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Error: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo + '\nColumn: ' + columnNo + '\nError object: ' + JSON.stringify(error));
+            return false;
+        };
+    </script>
+    <script src="bundle.js"></script>
 </body>
 </html> 

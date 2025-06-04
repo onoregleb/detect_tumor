@@ -2,37 +2,128 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 const store = new Store();
+let flaskServer = null;
+let mainWindow = null;
+
+console.log('Starting application...');
+console.log('Current directory:', __dirname);
+console.log('Index.html path:', path.join(__dirname, 'dist', 'index.html'));
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    },
-    title: 'Brain Tumor Detector',
-    icon: path.join(__dirname, 'assets/icon.png')
-  });
-
-  mainWindow.loadFile('index.html');
+  console.log('Creating main window...');
   
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
+  try {
+    mainWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        webSecurity: false
+      },
+      title: 'Brain Tumor Detector',
+      icon: path.join(__dirname, 'assets/icon.png')
+    });
+
+    console.log('Window created successfully');
+    console.log('Loading index.html...');
+    
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    console.log('Loading file from:', indexPath);
+    
+    if (fs.existsSync(indexPath)) {
+      mainWindow.loadFile(indexPath);
+    } else {
+      console.error('index.html not found at:', indexPath);
+      dialog.showErrorBox('Error', 'Could not find index.html file. Please make sure the application is built correctly.');
+      app.quit();
+    }
+    
+    if (process.argv.includes('--dev')) {
+      console.log('Opening DevTools...');
+      mainWindow.webContents.openDevTools();
+    }
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      console.error('Failed to load:', errorCode, errorDescription);
+      console.error('Failed URL:', mainWindow.webContents.getURL());
+    });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('Window loaded successfully');
+      console.log('Current URL:', mainWindow.webContents.getURL());
+    });
+
+    mainWindow.on('closed', () => {
+      console.log('Window closed');
+      mainWindow = null;
+    });
+
+    mainWindow.on('ready-to-show', () => {
+      console.log('Window is ready to show');
+      mainWindow.show();
+    });
+
+    mainWindow.on('show', () => {
+      console.log('Window is shown');
+    });
+
+  } catch (error) {
+    console.error('Error creating window:', error);
   }
 }
 
-app.whenReady().then(createWindow);
+function startFlaskServer() {
+  console.log('Starting Flask server...');
+  return new Promise((resolve, reject) => {
+    flaskServer = spawn('python', ['server.py']);
+
+    const checkReady = (data) => {
+      console.log(`Flask server: ${data}`);
+      if (data.toString().includes('Running on')) {
+        console.log('Flask server is ready');
+        resolve();
+      }
+    };
+
+    flaskServer.stdout.on('data', checkReady);
+    flaskServer.stderr.on('data', checkReady);
+
+    flaskServer.on('error', (error) => {
+      console.error('Flask server failed to start:', error);
+      reject(error);
+    });
+  });
+}
+
+app.on('ready', async () => {
+  console.log('Electron app is ready');
+  try {
+    await startFlaskServer();
+    console.log('Flask server started, creating window...');
+    createWindow();
+  } catch (error) {
+    console.error('Failed to start application:', error);
+    app.quit();
+  }
+});
 
 app.on('window-all-closed', () => {
+  console.log('All windows closed');
+  if (flaskServer) {
+    console.log('Killing Flask server');
+    flaskServer.kill();
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('activate', () => {
+  console.log('App activated');
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
@@ -68,30 +159,26 @@ ipcMain.handle('save-results', async (event, results) => {
 
 // Handle tumor detection
 ipcMain.handle('detect-tumor', async (event, imagePath) => {
-  return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python', ['detect.py', imagePath]);
+  try {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
     
-    let result = '';
-    let error = '';
-
-    pythonProcess.stdout.on('data', (data) => {
-      result += data.toString();
+    const response = await fetch('http://localhost:5000/api/detect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ image: `data:image/jpeg;base64,${base64Image}` }),
     });
 
-    pythonProcess.stderr.on('data', (data) => {
-      error += data.toString();
-    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(error || 'Detection failed'));
-        return;
-      }
-      try {
-        resolve(JSON.parse(result));
-      } catch (e) {
-        reject(new Error('Invalid detection result'));
-      }
-    });
-  });
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Detection error:', error);
+    throw new Error('Failed to process image: ' + error.message);
+  }
 }); 

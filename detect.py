@@ -17,7 +17,14 @@ def load_model():
     if not os.path.exists(model_path):
         print("Downloading brain tumor detection model...")
         model = YOLO('yolov8n.pt')  # Start with base model
-        # TODO: Fine-tune the model on brain tumor dataset
+        # Train on brain tumor dataset
+        model.train(
+            data='brain-tumor.yaml',
+            epochs=100,
+            imgsz=640,
+            batch=16,
+            name='brain_tumor'
+        )
         model.save(model_path)
     else:
         model = YOLO(model_path)
@@ -37,18 +44,26 @@ def detect_tumor(image_path, model):
             class_id = int(box.cls[0])
             class_name = result.names[class_id]
             
-            if class_name == 'tumor':  # Adjust based on your model's class names
+            # For brain tumor dataset, class 1 is positive (tumor)
+            if class_id == 1:  # positive class
                 detections.append({
                     'confidence': confidence,
                     'class': class_name,
                     'bbox': box.xyxy[0].tolist()
                 })
     
-    return {
+    # Return structured result
+    result = {
         'has_tumor': len(detections) > 0,
         'detections': detections,
         'confidence': max([d['confidence'] for d in detections], default=0)
     }
+    
+    # Validate result structure
+    if not isinstance(result, dict):
+        raise ValueError("Invalid detection result format")
+    
+    return result
 
 def main():
     if len(sys.argv) < 2:

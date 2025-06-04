@@ -1,0 +1,41 @@
+{
+  "name": "brain-tumor-detector",
+  "version": "1.0.0",
+  "description": "Brain tumor detection application using YOLO",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"webpack --watch\" \"wait-on dist/bundle.js && electron . --dev\"",
+    "build": "webpack --mode production && electron-builder",
+    "clean": "rimraf dist",
+    "rebuild": "npm run clean && webpack && electron .",
+    "flask": "python server.py",
+    "dev:all": "concurrently \"npm run flask\" \"npm run clean && webpack && wait-on dist/bundle.js && electron . --dev\""
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.13.0",
+    "electron-store": "^8.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.21.8",
+    "@babel/preset-react": "^7.18.6",
+    "babel-loader": "^9.1.2",
+    "concurrently": "^8.2.2",
+    "css-loader": "^6.7.3",
+    "electron": "^24.3.0",
+    "electron-builder": "^23.6.0",
+    "html-webpack-plugin": "^5.6.3",
+    "rimraf": "^5.0.0",
+    "style-loader": "^3.3.2",
+    "wait-on": "^7.2.0",
+    "webpack": "^5.82.1",
+    "webpack-cli": "^5.1.1"
+  }
+}
