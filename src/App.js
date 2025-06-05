@@ -26,6 +26,46 @@ const Input = styled('input')({
   display: 'none',
 });
 
+// New component for displaying image with bounding boxes
+const ImageWithBoundingBox = ({ imagePath, detections }) => {
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+
+  const handleImageLoad = (event) => {
+    setImageSize({
+      width: event.target.naturalWidth,
+      height: event.target.naturalHeight
+    });
+  };
+
+  return (
+    <Box sx={{ position: 'relative' }}>
+      <img
+        src={`file://${imagePath}`}
+        alt="Scan"
+        style={{ width: '100%', height: 'auto' }}
+        onLoad={handleImageLoad}
+      />
+      {detections && detections.map((detection, index) => {
+        const [x1, y1, x2, y2] = detection.bbox;
+        const width = imageSize.width;
+        const height = imageSize.height;
+        
+        const boxStyle = {
+          position: 'absolute',
+          left: `${(x1 / width) * 100}%`,
+          top: `${(y1 / height) * 100}%`,
+          width: `${((x2 - x1) / width) * 100}%`,
+          height: `${((y2 - y1) / height) * 100}%`,
+          border: '2px solid red',
+          boxSizing: 'border-box',
+        };
+
+        return <Box key={index} sx={boxStyle} />;
+      })}
+    </Box>
+  );
+};
+
 const App = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [results, setResults] = useState([]);
@@ -84,17 +124,17 @@ const App = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom align="center">
-          Brain Tumor Detection
+          Обнаружение Опухоли Головного Мозга
         </Typography>
         <Typography variant="subtitle1" gutterBottom align="center" color="text.secondary">
-          Upload MRI/CT scan images to detect potential brain tumors
+          Загрузите изображения МРТ/КТ для обнаружения потенциальных опухолей головного мозга
         </Typography>
       </Paper>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={handleTabChange} centered>
-          <Tab label="Batch Processing" />
-          <Tab label="Single Image" />
+          <Tab label="Пакетная Обработка" />
+          <Tab label="Одиночное Изображение" />
         </Tabs>
       </Box>
 
@@ -104,7 +144,7 @@ const App = () => {
             <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
               <Box sx={{ mb: 3 }}>
                 <Typography variant="h6" gutterBottom>
-                  Upload Images
+                  Загрузка Изображений
                 </Typography>
                 <Button
                   variant="contained"
@@ -113,12 +153,12 @@ const App = () => {
                   fullWidth
                   onClick={handleFileSelect}
                 >
-                  Select MRI/CT Images
+                  Выбрать Изображения МРТ/КТ
                 </Button>
                 {selectedFiles.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="body2" gutterBottom>
-                      {selectedFiles.length} file(s) selected
+                      Выбрано файлов: {selectedFiles.length}
                     </Typography>
                     <Grid container spacing={2}>
                       {selectedFiles.map((file, index) => (
@@ -128,7 +168,7 @@ const App = () => {
                               component="img"
                               height="200"
                               image={`file://${file}`}
-                              alt={`Uploaded scan ${index + 1}`}
+                              alt={`Загруженное изображение ${index + 1}`}
                               sx={{ objectFit: 'contain' }}
                             />
                           </Card>
@@ -148,7 +188,7 @@ const App = () => {
                 disabled={selectedFiles.length === 0 || loading}
                 sx={{ mb: 2 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Detect Tumors'}
+                {loading ? <CircularProgress size={24} /> : 'Обнаружить Опухоли'}
               </Button>
 
               {error && (
@@ -162,7 +202,7 @@ const App = () => {
           <Grid item xs={12} md={6}>
             <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
               <Typography variant="h6" gutterBottom>
-                Detection Results
+                Результаты Обнаружения
               </Typography>
               {results.length > 0 ? (
                 <>
@@ -172,31 +212,30 @@ const App = () => {
                       startIcon={<SaveIcon />}
                       onClick={handleSaveResults}
                     >
-                      Save Results
+                      Сохранить Результаты
                     </Button>
                   </Box>
                   <Grid container spacing={2}>
                     {results.map((result, index) => (
                       <Grid item xs={12} key={index}>
                         <Card>
-                          <CardMedia
-                            component="img"
-                            height="200"
-                            image={`file://${result.path}`}
-                            alt={`Scan ${index + 1}`}
-                            sx={{ objectFit: 'contain' }}
-                          />
+                          <Box sx={{ position: 'relative' }}>
+                            <ImageWithBoundingBox
+                              imagePath={result.path}
+                              detections={result.detections}
+                            />
+                          </Box>
                           <CardContent>
                             <Typography variant="h6" color={result.hasTumor ? 'error' : 'success'}>
-                              {result.hasTumor ? 'Tumor Detected' : 'No Tumor Detected'}
+                              {result.hasTumor ? 'Обнаружена Опухоль' : 'Опухоль Не Обнаружена'}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Confidence: {result.confidence.toFixed(2)}%
+                              Уверенность: {result.confidence.toFixed(2)}%
                             </Typography>
                             {result.detections && result.detections.length > 0 && (
                               <Box sx={{ mt: 1 }}>
                                 <Typography variant="body2">
-                                  Detected {result.detections.length} tumor(s)
+                                  Обнаружено опухолей: {result.detections.length}
                                 </Typography>
                               </Box>
                             )}
@@ -208,7 +247,7 @@ const App = () => {
                 </>
               ) : (
                 <Typography variant="body1" color="text.secondary" align="center">
-                  No results yet. Upload images and run detection to see results.
+                  Нет результатов. Загрузите изображения и запустите обнаружение, чтобы увидеть результаты.
                 </Typography>
               )}
             </Paper>
