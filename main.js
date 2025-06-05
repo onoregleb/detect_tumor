@@ -79,7 +79,17 @@ function createWindow() {
 function startFlaskServer() {
   console.log('Starting Flask server...');
   return new Promise((resolve, reject) => {
-    flaskServer = spawn('python', ['server.py']);
+    // Kill any existing Flask server process
+    if (flaskServer) {
+      console.log('Killing existing Flask server...');
+      flaskServer.kill();
+      flaskServer = null;
+    }
+
+    // Start new Flask server
+    flaskServer = spawn('python', ['server.py'], {
+      env: { ...process.env, PYTHONUNBUFFERED: '1' }
+    });
 
     const checkReady = (data) => {
       console.log(`Flask server: ${data}`);
@@ -95,6 +105,14 @@ function startFlaskServer() {
     flaskServer.on('error', (error) => {
       console.error('Flask server failed to start:', error);
       reject(error);
+    });
+
+    // Add error handling for process exit
+    flaskServer.on('exit', (code, signal) => {
+      console.log(`Flask server exited with code ${code} and signal ${signal}`);
+      if (code !== 0) {
+        reject(new Error(`Flask server exited with code ${code}`));
+      }
     });
   });
 }
@@ -160,22 +178,74 @@ ipcMain.handle('save-results', async (event, results) => {
 // Handle tumor detection
 ipcMain.handle('detect-tumor', async (event, imagePath) => {
   try {
+    // Check if file exists and is readable
+    if (!fs.existsSync(imagePath)) {
+      throw new Error('Image file does not exist');
+    }
+
+    // Check if Flask server is running and restart if needed
+    let serverRunning = false;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (!serverRunning && retryCount < maxRetries) {
+      try {
+        const serverCheck = await fetch('http://127.0.0.1:5000/api/health', { 
+          timeout: 5000,
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        if (serverCheck.ok) {
+          serverRunning = true;
+        } else {
+          throw new Error('Server responded with error');
+        }
+      } catch (error) {
+        console.log(`Server check attempt ${retryCount + 1} failed:`, error);
+        if (flaskServer) {
+          flaskServer.kill();
+        }
+        await startFlaskServer();
+        retryCount++;
+        if (retryCount < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+        }
+      }
+    }
+
+    if (!serverRunning) {
+      throw new Error('Failed to start Flask server after multiple attempts');
+    }
+
+    // Read and validate image
     const imageBuffer = fs.readFileSync(imagePath);
+    if (imageBuffer.length === 0) {
+      throw new Error('Image file is empty');
+    }
+
     const base64Image = imageBuffer.toString('base64');
     
-    const response = await fetch('http://localhost:5000/api/detect', {
+    const response = await fetch('http://127.0.0.1:5000/api/detect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({ image: `data:image/jpeg;base64,${base64Image}` }),
+      timeout: 60000, // Increased timeout to 60 seconds
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Server error: ${errorText}`);
     }
 
     const result = await response.json();
+    if (!result || typeof result !== 'object') {
+      throw new Error('Invalid response from server');
+    }
+
     return result;
   } catch (error) {
     console.error('Detection error:', error);

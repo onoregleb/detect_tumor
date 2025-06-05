@@ -5,3 +5,5 @@ yolov8n.pt
 node_modules/
 dist/
 build/
+datasets/
+runs/

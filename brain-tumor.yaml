@@ -1,12 +1,6 @@
-# Brain-tumor dataset configuration
-path: ./datasets/brain-tumor  # dataset root dir
-train: train/images  # train images (relative to 'path')
-val: valid/images  # val images (relative to 'path')
-
-# Classes
 names:
-  0: negative  # no tumor
-  1: positive  # tumor present
-
-# Download script/URL (optional)
-download: https://github.com/ultralytics/assets/releases/download/v0.0.0/brain-tumor.zip 
+  0: negative
+  1: positive
+path: C:\Users\Gleb Onore\Desktop\detect_tumor\datasets
+train: train/images
+val: valid/images
