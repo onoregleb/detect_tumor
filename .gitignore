@@ -7,3 +7,4 @@ dist/
 build/
 datasets/
 runs/
+__pycache__/
